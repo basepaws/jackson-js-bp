@@ -1,0 +1,125 @@
+name: CI/CD Beta
+
+on:
+  push:
+    branches: [ release/** ]
+
+concurrency: 
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BRANCH: ${{ github.ref_name }}
+  PROJECT_FOLDER: /basepaws/jackson-lib
+
+jobs:
+  deploy:
+    name: Deploy to BETA on develop branch push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v2.0.0
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: C03JPNVPR5J
+          slack-text: Starting deploy of JACKSON-LIB to BETA
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@master
+        env:
+          BRANCH: ${{ github.ref_name }}
+          PROJECT_FOLDER: ${{ env.PROJECT_FOLDER }}
+        with:
+          host: ${{ secrets.HOST_DNS_BETA }}
+          username: ${{ secrets.USERNAME_BETA }}
+          key: ${{ secrets.SSH_KEY_BETA }}
+          port: ${{ 22 }}
+          envs: BRANCH, PROJECT_FOLDER
+          script: |
+            cd $PROJECT_FOLDER
+            git fetch origin
+            git checkout $BRANCH
+  slack-failure-deploy:
+    needs: deploy
+    runs-on: ubuntu-20.04
+    name: Send message failure deploy to Slack API
+    if: failure()
+    steps:
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v2.0.0
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: C03JPNVPR5J
+          slack-text: Deploy fail!
+      - name: Result from "Send Message"
+        run: echo "The result was ${{ steps.notify.outputs.slack-result }}"
+  slack-correct-deploy:
+    needs: deploy
+    runs-on: ubuntu-20.04
+    name: Send message correct deploy to Slack API
+    steps:
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v2.0.0
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: C03JPNVPR5J
+          slack-text: Deploy correct!
+      - name: Result from "Send Message"
+        run: echo "The result was ${{ steps.notify.outputs.slack-result }}"
+  install:
+    needs: deploy
+    name: Install new version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v2.0.0
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: C03JPNVPR5J
+          slack-text: Installing new version...
+      - name: Install new version
+        uses: appleboy/ssh-action@master
+        env:
+          PROJECT_FOLDER: ${{ env.PROJECT_FOLDER }}
+        with:
+          host: ${{ secrets.HOST_DNS_BETA }}
+          username: ${{ secrets.USERNAME_BETA }}
+          key: ${{ secrets.SSH_KEY_BETA }}
+          port: ${{ 22 }}
+          envs: PROJECT_FOLDER
+          script: |
+            cd $PROJECT_FOLDER
+            npm i
+            npm run build:prod
+  slack-failure-install:
+    needs: install
+    runs-on: ubuntu-20.04
+    name: Send message failure install to Slack API
+    if: failure()
+    steps:
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v2.0.0
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: C03JPNVPR5J
+          slack-text: Install fail!
+      - name: Result from "Send Message"
+        run: echo "The result was ${{ steps.notify.outputs.slack-result }}"
+  slack-correct-install:
+    needs: install
+    runs-on: ubuntu-20.04
+    name: Send message correct install to Slack API
+    steps:
+      - name: Send message to Slack API
+        uses: archive/github-actions-slack@v2.0.0
+        id: notify
+        with:
+          slack-bot-user-oauth-access-token: ${{ secrets.SLACK_BOT_USER_OAUTH_ACCESS_TOKEN }}
+          slack-channel: C03JPNVPR5J
+          slack-text: Install correct!
+      - name: Result from "Send Message"
+        run: echo "The result was ${{ steps.notify.outputs.slack-result }}"
